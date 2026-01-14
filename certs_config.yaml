@@ -1,0 +1,36 @@
+# Configuration des certificats pour la stack ELK
+# Ce fichier définit tous les paramètres pour la génération automatique
+
+ca:
+  common_name: "ELK-Root-CA"
+  validity_days: 3650  # 10 ans
+  key_size: 4096
+  organization: "ELK-DevOps"
+  country: "MG"
+
+services:
+  elasticsearch:
+    type: server
+    key_size: 2048
+    validity_days: 365
+    dns_names:
+      - "localhost"
+      - "es.local"
+      - "elasticsearch"
+    ip_addresses:
+      - "127.0.0.1"
+  
+  logstash:
+    type: client
+    key_size: 2048
+    validity_days: 365
+  
+  kibana:
+    type: client
+    key_size: 2048
+    validity_days: 365
+
+# Configuration des volumes (pour Docker)
+volumes:
+  base_path: "/certs"      # Dans Docker
+  local_path: "./certs_output"  # En local pour les tests
