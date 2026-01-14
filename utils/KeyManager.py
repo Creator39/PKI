@@ -10,6 +10,20 @@ class KeyManager:
     def __post_init__(self):
         self.key_dir.mkdir(parents=True, exist_ok=True)
     
+    def load_private_key(self, key_path: Path) -> rsa.RSAPrivateKey:
+        """Charge une clé privée existante depuis un fichier PEM."""
+        if not key_path.exists():
+            raise FileNotFoundError(f"Clé privée introuvable: {key_path}")
+        
+        with open(key_path, 'rb') as f:
+            private_key = serialization.load_pem_private_key(
+                f.read(),
+                password=None  # Pas de mot de passe pour l'instant
+            )
+        
+        print(f"✅ Clé privée chargée: {key_path}")
+        return private_key
+    
     def create_rsa_keypair(self, key_name: str, key_size: int = 2048):
         private_key = rsa.generate_private_key(
             public_exponent=65537,

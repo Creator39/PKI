@@ -338,7 +338,9 @@ class CertManager:
     def create_ca_certificate(self,
         private_key: rsa.RSAPrivateKey,
         common_name: str = "ELK-CA",
-        validity_days: int = 3650  # 10 ans
+        validity_days: int = 3650,  # 10 ans
+        organization: str = "ELK-DevOps",
+        country: str = "MG"
         ) -> x509.Certificate:
         """
         Crée un certificat auto-signé pour la Certificate Authority.
@@ -357,7 +359,7 @@ class CertManager:
             raise ValueError("La clé privée de la CA doit être fournie pour créer le certificat CA.")
 
         # 1. Créer le Subject et l'Issuer (identiques pour auto-signé)
-        subject = issuer = self.create_name(common_name)
+        subject = issuer = self.create_name(common_name, organization, country)
         
         print(f"📝 Création du certificat CA : {common_name}")
         

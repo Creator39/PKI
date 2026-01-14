@@ -45,13 +45,17 @@ class ELKCertGenerator:
         if ca_cert_file.exists():
             print("♻️  CA existante détectée, chargement...")
             
-            # Charger la clé privée existante
+            # Charger la clé privée existante (ne pas la régénérer !)
             key_manager = KeyManager(key_dir=ca_key_dir)
-            ca_keypair = key_manager.create_rsa_keypair(
-                key_name="ca",
-                key_size=ca_config.get('key_size', 4096)
-            )
-            self.ca_private_key = ca_keypair["private_key"]
+            ca_key_file = ca_key_dir / "ca_private.pem"
+            
+            if not ca_key_file.exists():
+                raise FileNotFoundError(
+                    f"Certificat CA trouvé mais clé privée manquante: {ca_key_file}\n"
+                    "Supprimez le dossier ca/ et régénérez tout."
+                )
+            
+            self.ca_private_key = key_manager.load_private_key(ca_key_file)
             
             # Charger le certificat existant
             temp_cert_manager = CertManager(
@@ -89,7 +93,9 @@ class ELKCertGenerator:
         self.ca_certificate = temp_cert_manager.create_ca_certificate(
             private_key=self.ca_private_key,
             common_name=ca_config.get('common_name', 'ELK-Root-CA'),
-            validity_days=ca_config.get('validity_days', 3650)
+            validity_days=ca_config.get('validity_days', 3650),
+            organization=ca_config.get('organization', 'ELK-DevOps'),
+            country=ca_config.get('country', 'MG')
         )
         
         # Sauvegarder
@@ -216,6 +222,48 @@ class ELKCertGenerator:
         # Récapitulatif
         self.display_summary()
     
+    def verify_certificate_chain(self, service_name: str) -> bool:
+        """
+        Vérifie qu'un certificat de service est valide et signé par la CA.
+        
+        Args:
+            service_name: Nom du service à vérifier
+            
+        Returns:
+            True si valide, False sinon
+        """
+        import subprocess
+        
+        ca_cert = self.output_dir / "ca" / "ca_cert.pem"
+        service_cert = self.output_dir / service_name / f"{service_name}_cert.pem"
+        
+        if not service_cert.exists():
+            print(f"⚠️  Certificat {service_name} introuvable")
+            return False
+        
+        try:
+            result = subprocess.run(
+                ["openssl", "verify", "-CAfile", str(ca_cert), str(service_cert)],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode == 0:
+                print(f"✅ {service_name}: Chaîne de confiance valide")
+                return True
+            else:
+                print(f"❌ {service_name}: Erreur de validation")
+                print(f"   {result.stderr.strip()}")
+                return False
+                
+        except subprocess.TimeoutExpired:
+            print(f"⚠️  {service_name}: Timeout lors de la validation")
+            return False
+        except FileNotFoundError:
+            print(f"⚠️  openssl n'est pas installé (validation ignorée)")
+            return False
+
     def display_summary(self) -> None:
         """
         Affiche un récapitulatif de la génération.
@@ -237,7 +285,12 @@ class ELKCertGenerator:
             print(f"   │   ├── ca_cert.pem (copie)")
             print(f"   │   └── keys/{service_name}_private.pem")
         
-        print(f"\n💡 Commandes de vérification :")
+        # Validation automatique
+        print(f"\n🔍 Validation des certificats:")
+        for service_name in services_config.keys():
+            self.verify_certificate_chain(service_name)
+        
+        print(f"\n💡 Commandes de vérification manuelles :")
         print(f"   # Vérifier le certificat Elasticsearch")
         print(f"   openssl x509 -in {self.output_dir}/elasticsearch/elasticsearch_cert.pem -text -noout")
         print(f"\n   # Vérifier la chaîne de confiance")
