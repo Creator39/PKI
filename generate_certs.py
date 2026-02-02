@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+import os
 from utils.CertificateManager import CertManager
 from utils.KeyManager import KeyManager
 from utils.load_config import ConfigLoader
@@ -219,8 +220,65 @@ class ELKCertGenerator:
         # Générer les certificats des services
         self.generate_all_services()
         
+        # Corriger les permissions
+        self.fix_permissions()
+        
         # Récapitulatif
         self.display_summary()
+    
+    def fix_permissions(self) -> None:
+        """
+        Corrige les permissions des fichiers de certificats.
+        
+        Les fichiers de certificats doivent être lisibles par Elasticsearch (uid 1000).
+        Les clés privées doivent être lisibles uniquement par le propriétaire.
+        """
+        print("\n" + "="*60)
+        print("CORRECTION DES PERMISSIONS")
+        print("="*60)
+        
+        # Vérifier si on tourne en root
+        if os.getuid() != 0:
+            print("⚠️  Avertissement : Ce script doit tourner en root pour changer le propriétaire des fichiers")
+            print("   Les permissions seront définies mais le propriétaire restera inchangé")
+        
+        try:
+            # Parcourir tous les fichiers dans output_dir
+            for root, dirs, files in os.walk(self.output_dir):
+                root_path = Path(root)
+                
+                # Permissions pour les dossiers: 755 (rwxr-xr-x)
+                os.chmod(root_path, 0o755)
+                
+                # Changer le propriétaire pour Elasticsearch (UID 1000, GID 1000)
+                if os.getuid() == 0:
+                    os.chown(root_path, 1000, 1000)
+                
+                for file in files:
+                    file_path = root_path / file
+                    
+                    if "private" in file.lower() or file_path.parent.name == "keys":
+                        # Clés privées: 644 (rw-r--r--) pour permettre la lecture par Elasticsearch
+                        os.chmod(file_path, 0o644)
+                        print(f"✅ Permissions clé privée  : {file_path.relative_to(self.output_dir)} (644)")
+                    else:
+                        # Certificats publics: 644 (rw-r--r--)
+                        os.chmod(file_path, 0o644)
+                        print(f"✅ Permissions certificat : {file_path.relative_to(self.output_dir)} (644)")
+                    
+                    # Changer le propriétaire pour Elasticsearch (UID 1000, GID 1000)
+                    if os.getuid() == 0:
+                        os.chown(file_path, 1000, 1000)
+            
+            if os.getuid() == 0:
+                print(f"\n✅ Permissions et propriétaire corrigés pour tous les fichiers")
+                print(f"   Propriétaire: elasticsearch (UID 1000, GID 1000)")
+            else:
+                print(f"\n✅ Permissions corrigées (propriétaire inchangé)")
+            
+        except Exception as e:
+            print(f"❌ Erreur lors de la correction des permissions : {e}")
+            raise
     
     def verify_certificate_chain(self, service_name: str) -> bool:
         """

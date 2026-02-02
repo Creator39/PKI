@@ -92,6 +92,16 @@ class CertManager:
                 ]),
                 critical=False,
             )
+            # EXTENSION 4 : Subject Key Identifier
+            .add_extension(
+                x509.SubjectKeyIdentifier.from_public_key(client_private_key.public_key()),
+                critical=False,
+            )
+            # EXTENSION 5 : Authority Key Identifier
+            .add_extension(
+                x509.AuthorityKeyIdentifier.from_issuer_public_key(self.key_CA.public_key()),
+                critical=False,
+            )
             .sign(self.key_CA, hashes.SHA256())
         )
     
@@ -205,6 +215,18 @@ class CertManager:
         # EXTENSION 4 : SubjectAlternativeName
         .add_extension(
             x509.SubjectAlternativeName(san_list),
+            critical=False,
+        )
+        
+        # EXTENSION 5 : Subject Key Identifier
+        .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(server_private_key.public_key()),
+            critical=False,
+        )
+        
+        # EXTENSION 6 : Authority Key Identifier
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(self.key_CA.public_key()),
             critical=False,
         )
         
@@ -403,6 +425,12 @@ class CertManager:
                     decipher_only=False,
                 ),
                 critical=True,
+            )
+            
+            # EXTENSION 3 : Subject Key Identifier (requis pour CA)
+            .add_extension(
+                x509.SubjectKeyIdentifier.from_public_key(private_key.public_key()),
+                critical=False,
             )
             
             # 3. Signer le certificat avec la clé privée de la CA
